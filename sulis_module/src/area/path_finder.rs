@@ -332,33 +332,32 @@ impl PathFinder {
 
         let mut neighbors = [point - width, point + 1, point - 1, point + width];
 
-        for i in 0..4 {
-            let n = neighbors[i];
+        for (i, n) in neighbors.iter_mut().enumerate() {
 
-            if i == 0 && n <= 0 {
-
-                neighbors[i] = -1;
-
-            } else if i == 1 && n >= width * height {
-
-                neighbors[i] = -1;
-
-            } else if i > 1 && n % width == point % width {
-
-                neighbors[i] = -1;
-
-            } else {
-                //trace!("Checking neighbor {}", neighbor);
-                if let Some(&itno) = self.closed.get(&n) {
-                    //trace!("Already evaluated.");
-
-                    if itno < iterations - 2 { // going in circles
-                        //trace!("Circular path.");
-                        return [-1; 4];
-                    }
-                    // already seen but was impassable or last or before-last
-                    neighbors[i] = -1;
+            if i == 0 {
+                if *n <= 0 {
+                    *n = -1;
+                    continue;
                 }
+            } else if i == 1 {
+                if *n >= width * height {
+                    *n = -1;
+                    continue;
+                }
+            } else if i > 1 && *n % width == point % width {
+                *n = -1;
+                continue;
+            }
+            //trace!("Checking neighbor {}", neighbor);
+            if let Some(&itno) = self.closed.get(n) {
+                //trace!("Already evaluated.");
+
+                if itno < iterations - 2 { // going in circles
+                    //trace!("Circular path.");
+                    return [-1; 4];
+                }
+                // already seen but was impassable or last or before-last
+                *n = -1;
             }
         }
         //trace!("Got neighbors for {}: {:?}", point, neighbors);
