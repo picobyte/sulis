@@ -94,7 +94,7 @@ pub struct PathFinder {
     g_score: Vec<i32>,
     open: BinaryHeap<OpenEntry>,
     open_set: HashSet<i32>,
-    closed: HashSet<i32>,
+    closed: HashMap<i32, i32>,
     came_from: HashMap<i32, i32>,
 
     dest_x: f32,
@@ -116,7 +116,7 @@ impl PathFinder {
             g_score: vec![0; (width * height) as usize],
             open: BinaryHeap::new(),
             open_set: HashSet::default(),
-            closed: HashSet::default(),
+            closed: HashMap::default(),
             came_from: HashMap::default(),
             dest_x: 0.0,
             dest_y: 0.0,
@@ -238,18 +238,13 @@ impl PathFinder {
                 return Some(path);
             }
 
-            self.closed.insert(current);
+            self.closed.insert(current, iterations);
 
-            let neighbors = self.get_neighbors(current);
+            let neighbors = self.get_neighbors(current, iterations);
             for neighbor in neighbors.iter() {
                 let neighbor = *neighbor;
                 if neighbor == -1 {
                     continue;
-                }
-                //trace!("Checking neighbor {}", neighbor);
-                if self.closed.contains(&neighbor) {
-                    //trace!("Already evaluated.");
-                    continue; // neighbor has already been evaluated
                 }
 
                 // we compute the passability of each point as needed here
@@ -257,7 +252,9 @@ impl PathFinder {
                 let neighbor_y = neighbor / self.width;
 
                 if !checker.passable(neighbor_x, neighbor_y) {
-                    self.closed.insert(neighbor);
+                    // non-passable should not trigger a going in circles skip:
+                    // they can recur when tested from another side.
+                    self.closed.insert(neighbor, i32::max_value());
                     //trace!("Not passable");
                     continue;
                 }
@@ -329,29 +326,41 @@ impl PathFinder {
 
     #[inline]
     // using an array here instead of a vec is much faster
-    fn get_neighbors(&self, point: i32) -> [i32; 4] {
+    fn get_neighbors(&self, point: i32, iterations: i32) -> [i32; 4] {
         let width = self.width;
         let height = self.height;
 
-        let top = point - width;
-        let right = point + 1;
-        let left = point - 1;
-        let bottom = point + width;
+        let mut neighbors = [point - width, point + 1, point - 1, point + width];
 
-        let mut neighbors = [-1; 4];
-        if top > 0 {
-            neighbors[0] = top;
-        }
-        if bottom < width * height {
-            neighbors[1] = bottom;
-        }
-        if right % width != point % width {
-            neighbors[2] = right;
-        }
-        if left % width != point % width {
-            neighbors[3] = left;
-        }
+        for i in 0..4 {
+            let n = neighbors[i];
 
+            if i == 0 && n <= 0 {
+
+                neighbors[i] = -1;
+
+            } else if i == 1 && n >= width * height {
+
+                neighbors[i] = -1;
+
+            } else if i > 1 && n % width == point % width {
+
+                neighbors[i] = -1;
+
+            } else {
+                //trace!("Checking neighbor {}", neighbor);
+                if let Some(&itno) = self.closed.get(&n) {
+                    //trace!("Already evaluated.");
+
+                    if itno < iterations - 2 { // going in circles
+                        //trace!("Circular path.");
+                        return [-1; 4];
+                    }
+                    // already seen but was impassable or last or before-last
+                    neighbors[i] = -1;
+                }
+            }
+        }
         //trace!("Got neighbors for {}: {:?}", point, neighbors);
         neighbors
     }
